@@ -1,3 +1,135 @@
-from django.shortcuts import render
+import json
+import uuid
+import bcrypt
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
-# Create your views here.
+from api.models import User, UserCharacterSelected, Character
+
+
+def register_user(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method must be POST'}, status=401)
+    try:
+        body_json = json.loads(request.body)
+    except json.decoder.JSONDecodeError:
+        return JsonResponse({'error':'Json inválido'},status = 400)
+
+    username = body_json['username']
+    password = body_json['password']
+    cpassword = body_json['cpassword']
+
+    #Comprobación de datos
+    if not username or not password or not cpassword:
+        return JsonResponse({'error':'Falta usuario, contraseña o confirmar contraseña'},status = 400)
+    if password != cpassword:
+        return JsonResponse({'error':'Las contraseñas no coinciden'},status = 400)
+    if User.objects.filter(username=username).exists():
+        return JsonResponse({'error':'Usuario ya existente'},status = 400)
+
+    #Encriptación contraseña
+    encrypt = bcrypt.gensalt()
+    hased_password = bcrypt.hashpw(password.encode('utf8'), encrypt).decode('utf8')
+
+    #Creación usuario
+    new_user =User(username=username, password=hased_password)
+    new_user.save()
+    return JsonResponse({'status': 'Usuario creado correctamente'},status = 200)
+
+def get_user(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method must be GET'}, status=401)
+    session_token = request.headers.get('session')
+
+    #Comprobaciones de datos
+    if not session_token:
+        return JsonResponse({'error': 'Session token no valido'}, status=401)
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=401)
+    try:
+        favorito = UserCharacterSelected.objects.get(user=user, is_selected = True)
+    except UserCharacterSelected.DoesNotExist:
+
+    #Si no tiene favorito se le asigna el default
+        try:
+            personaje_base = Character.objects.get(id=1)
+            favorito = UserCharacterSelected.objects.create(
+                user=user,
+                character = personaje_base,
+                is_selected = True
+            )
+        except Character.DoesNotExist:
+
+            return JsonResponse({'error': 'Personaje no existe'}, status=404)
+    return JsonResponse({
+            'username': user.username,
+            'special_money' : user.special_money,
+            'volume' : user.volume,
+            'resolution' : user.resolution,
+            'is_selected' : favorito.character.name
+        })
+
+
+def favorite(request, character_id):
+    if request.method != 'PUT':
+        return JsonResponse({'error': 'Método inválido'}, status=401)
+
+    #Comprobación de datos
+    session_token = request.headers.get('session')
+    if not session_token:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+
+    try:
+        personaje_nuevo = Character.objects.get(id=character_id)
+    except Character.DoesNotExist:
+        return JsonResponse({'error': 'Personaje no existe'}, status=404)
+    try:
+        relacion_inventario = UserCharacterSelected.objects.get(user=user, character = personaje_nuevo)
+    except UserCharacterSelected.DoesNotExist:
+        return JsonResponse({'error': 'Personaje no existe'}, status=404)
+
+    #Cambio de favorito
+    UserCharacterSelected.objects.filter(user=user,is_selected = True).update(is_selected = False)
+    relacion_inventario.is_selected = True
+    relacion_inventario.save()
+    return JsonResponse({'status':'Personaje favorito actualizado'}, status=200)
+
+def login(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método inválido'}, status=401)
+    try:
+        body_json = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    username = body_json.get('username')
+    password = body_json.get('password')
+    #Validar datos
+    if not username or not password:
+        return JsonResponse({'error': 'Falta username o password'}, status=401)
+
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Credenciales incorrectas'}, status=401)
+
+    #Validar contraseña con Bcrypt
+    if not bcrypt.checkpw(password.encode('utf8'), user.password.encode('utf8')):
+        return JsonResponse({'error': 'Credenciales incorrectas'}, status=401)
+
+    #Generar sesión y guardarla
+    new_session_token = str(uuid.uuid4())
+    user.session_token = new_session_token
+    user.save()
+
+    return JsonResponse({"session": new_session_token}, status=201)
+
+
+
