@@ -6,7 +6,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from api.models import User, UserCharacterSelected, Character, Run
 
-
+@csrf_exempt
 def register_user(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method must be POST'}, status=401)
@@ -51,7 +51,6 @@ def get_user(request):
     try:
         favorito = UserCharacterSelected.objects.get(user=user, is_selected = True)
     except UserCharacterSelected.DoesNotExist:
-
     #Si no tiene favorito se le asigna el default
         try:
             personaje_base = Character.objects.get(id=1)
@@ -61,7 +60,6 @@ def get_user(request):
                 is_selected = True
             )
         except Character.DoesNotExist:
-
             return JsonResponse({'error': 'Personaje no existe'}, status=404)
     return JsonResponse({
             'username': user.username,
@@ -71,7 +69,7 @@ def get_user(request):
             'is_selected' : favorito.character.name
         })
 
-
+@csrf_exempt
 def favorite(request, character_id):
     if request.method != 'PUT':
         return JsonResponse({'error': 'Método inválido'}, status=401)
@@ -101,6 +99,7 @@ def favorite(request, character_id):
     relacion_inventario.save()
     return JsonResponse({'status':'Personaje favorito actualizado'}, status=200)
 
+@csrf_exempt
 def login(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método inválido'}, status=401)
@@ -134,7 +133,7 @@ def login(request):
 def get_characters(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'Método invalido'}, status=401)
-
+    #Validar datos
     session_token = request.headers.get('session')
     if not session_token:
         return JsonResponse({'error': 'Session token no valido'}, status=400)
@@ -148,6 +147,7 @@ def get_characters(request):
 
     ids_comprados = list(UserCharacterSelected.objects.filter(user=user).values_list('character_id', flat=True))
 
+    #Listado personajes
     lista_respuestas = []
     for personaje in personajes:
         lista_respuestas.append({
@@ -166,8 +166,8 @@ def get_characters(request):
 
     return JsonResponse({'characters': lista_respuestas}, status=200)
 
-
-def comprar_personaje(request, id_personaje):
+@csrf_exempt
+def comprar_personaje(request, character_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method must be POST'}, status=405)
 
@@ -183,7 +183,7 @@ def comprar_personaje(request, id_personaje):
 
     #¿Existe el personaje que quiere comprar?
     try:
-        personaje_a_comprar = Character.objects.get(id=id_personaje)
+        personaje_a_comprar = Character.objects.get(id=character_id)
     except Character.DoesNotExist:
         return JsonResponse({'error': 'El personaje solicitado no existe'}, status=404)
 
@@ -211,9 +211,9 @@ def comprar_personaje(request, id_personaje):
 
 def leaderboard(request):
     if request.method != 'GET':
-        JsonResponse({'error: Metodo invalido'}, status=401)
-
-    runs = Run.objects.select_related('user').order_by('time')[:10]
+        return JsonResponse({'error': 'Metodo invalido'}, status=401)
+    #Coge las 10 mejores runs de todas las que hay ordenadas por tiempo
+    runs = Run.objects.select_related('user').order_by('-time')[:10]
     leaderboard = []
 
     for run in runs:
@@ -221,9 +221,67 @@ def leaderboard(request):
             "user" : run.user.username,
             "time" : run.time,
             "character" : run.character.name,
+            "lvl_max" : run.lvl_max,
         })
     return JsonResponse({'leaderboard': leaderboard}, status=200)
 
+@csrf_exempt
+def post_runs(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo inválido'}, status=401)
+    session_token = request.headers.get('session')
+    if not session_token:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+    except json.decoder.JSONDecodeError:
+        return JsonResponse({'error':'El cuerpo debe ser un JSON válido'}, status=400)
+
+    time = data.get('time')
+    lvl_max = data.get('lvl_max')
+    special_money = data.get('special_money')
+
+    try:
+        favorite = UserCharacterSelected.objects.get(user=user, is_selected=True)
+        character_active = favorite.character
+    except UserCharacterSelected.DoesNotExist:
+        return JsonResponse({'error': 'El jugador no tiene un personaje equipado'}, status=400)
+    new_run = Run.objects.create(
+        user=user,
+        time = time,
+        lvl_max = lvl_max,
+        special_money = special_money,
+        character = character_active,
+    )
+    if special_money > 0:
+        user.special_money += special_money
+        user.save()
+    return JsonResponse({'mensaje': 'Run guardada correctamente', 'run_id': new_run.id}, status=201)
+
+@csrf_exempt
+def logout_user(request):
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Método invalido'}, status=405)
+
+   #Validar datos
+    session_token = request.headers.get('session')
+
+    if not session_token:
+        return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
+
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=401)
 
 
+    #Ponemos el token a None
+    user.session_token = None
+    user.save()
 
+    return JsonResponse({'mensaje': 'Sesión cerrada correctamente'}, status=200)
