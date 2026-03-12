@@ -131,5 +131,43 @@ def login(request):
 
     return JsonResponse({"session": new_session_token}, status=201)
 
+def get_characters(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método invalido'}, status=401)
+
+    session_token = request.headers.get('session')
+    if not session_token:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=400)
+
+    personajes = Character.objects.all()
+
+    ids_comprados = list(UserCharacterSelected.objects.filter(user=user).values_list('character_id', flat=True))
+
+    lista_respuestas = []
+    for personaje in personajes:
+        lista_respuestas.append({
+            'id': personaje.id,
+            'name': personaje.name,
+            'price': personaje.price,
+            'base_life': personaje.base_life,
+            'base_dmg': personaje.base_dmg,
+            'base_defense': personaje.base_defense,
+            'base_luck': personaje.base_luck,
+            'exp_multiplier': personaje.exp_multiplier,
+            'base_movspeed': personaje.base_movspeed,
+            'base_atckspeed': personaje.base_atckspeed,
+            'purchased': personaje.id in ids_comprados,
+        })
+
+    return JsonResponse({'characters': lista_respuestas}, status=200)
+
+
+
+
 
 
