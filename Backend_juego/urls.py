@@ -17,6 +17,17 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
+from api import endpoints
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('register/', endpoints.register_user),
+    path('login/',endpoints.login),
+    path('logout/',endpoints.logout_user),
+    path('user/',endpoints.get_user),
+    path('inventory/<int:character_id>/equip/', endpoints.favorite),
+    path('characters/', endpoints.get_characters),
+    path('shop/<int:character_id>/buy/',endpoints.comprar_personaje),
+    path('run/save/',endpoints.post_runs),
+    path('leaderboard/',endpoints.leaderboard)
 ]
