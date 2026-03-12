@@ -4,7 +4,7 @@ import bcrypt
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
-from api.models import User, UserCharacterSelected, Character
+from api.models import User, UserCharacterSelected, Character, Run
 
 
 def register_user(request):
@@ -167,6 +167,62 @@ def get_characters(request):
     return JsonResponse({'characters': lista_respuestas}, status=200)
 
 
+def comprar_personaje(request, id_personaje):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method must be POST'}, status=405)
+
+    #Validar datos
+    session_token = request.headers.get('session')
+    if not session_token:
+        return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
+
+    try:
+        user = User.objects.get(session_token=session_token)
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'Session token no valido'}, status=401)
+
+    #¿Existe el personaje que quiere comprar?
+    try:
+        personaje_a_comprar = Character.objects.get(id=id_personaje)
+    except Character.DoesNotExist:
+        return JsonResponse({'error': 'El personaje solicitado no existe'}, status=404)
+
+    ya_lo_tiene = UserCharacterSelected.objects.filter(user=user, character=personaje_a_comprar).exists()
+    if ya_lo_tiene:
+        return JsonResponse({'error': 'Ya tienes este personaje en tu inventario'}, status=400)
+
+    #¿Tiene dinero suficiente?
+    if user.special_money < personaje_a_comprar.price:
+        return JsonResponse({'error': 'No tienes monedas suficientes'}, status=400)
+
+    user.special_money -= personaje_a_comprar.price
+    user.save()
+    #Guardas personaje en tu lista sin ponerlo con is_selected = True
+    UserCharacterSelected.objects.create(
+        user=user,
+        character=personaje_a_comprar,
+        is_selected=False
+    )
+
+    return JsonResponse({
+        'mensaje': f'Has comprado a {personaje_a_comprar.name} con éxito',
+        'dinero_restante': user.special_money
+    }, status=200)
+
+def leaderboard(request):
+    if request.method != 'GET':
+        JsonResponse({'error: Metodo invalido'}, status=401)
+
+    runs = Run.objects.select_related('user').order_by('time')[:10]
+    leaderboard = []
+
+    for run in runs:
+        leaderboard.append({
+            "user" : run.user.username,
+            "time" : run.time,
+            "character" : run.character.name,
+        })
+    return JsonResponse({'leaderboard': leaderboard}, status=200)
 
 
 
