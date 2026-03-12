@@ -209,21 +209,31 @@ def comprar_personaje(request, character_id):
         'dinero_restante': user.special_money
     }, status=200)
 
+
 def leaderboard(request):
     if request.method != 'GET':
-        return JsonResponse({'error': 'Metodo invalido'}, status=401)
-    #Coge las 10 mejores runs de todas las que hay ordenadas por tiempo
-    runs = Run.objects.select_related('user').order_by('-time')[:10]
-    leaderboard = []
+        return JsonResponse({'error': 'Metodo invalido'}, status=405)
 
+
+    limite = request.GET.get('limit', 10)
+
+    try:
+        limite = int(limite)
+    except ValueError:
+        limite = 10
+
+    runs = Run.objects.select_related('user').order_by('-time')[:limite]
+
+    leaderboard_data = []
     for run in runs:
-        leaderboard.append({
-            "user" : run.user.username,
-            "time" : run.time,
-            "character" : run.character.name,
-            "lvl_max" : run.lvl_max,
+        leaderboard_data.append({
+            "user": run.user.username,
+            "time": run.time,
+            "character": run.character.name,
+            "lvl_max": run.lvl_max,
         })
-    return JsonResponse({'leaderboard': leaderboard}, status=200)
+
+    return JsonResponse({'leaderboard': leaderboard_data}, status=200)
 
 @csrf_exempt
 def post_runs(request):
