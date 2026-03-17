@@ -12,6 +12,9 @@ class User(models.Model):
     ]
     resolution = models.IntegerField(choices=resolution_choices, default=1)
 
+    def __str__(self):
+        return self.username
+
 class Character(models.Model):
     name = models.CharField(max_length = 100,unique=True)
     price = models.IntegerField(default=0)
@@ -22,6 +25,9 @@ class Character(models.Model):
     exp_multiplier = models.FloatField(default=0)
     base_movspeed = models.FloatField(default=0)
     base_atckspeed = models.FloatField(default=0)
+
+    def __str__(self):
+        return self.name
 
 class Run(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -34,3 +40,6 @@ class UserCharacterSelected(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     character = models.ForeignKey(Character, on_delete=models.CASCADE)
     is_selected = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.character.name} (Equipado: {self.is_selected})"
