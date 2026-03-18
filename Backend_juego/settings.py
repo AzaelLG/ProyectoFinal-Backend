@@ -27,6 +27,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CSRF_TRUSTED_ORIGINS = ['https://uncommunicative-katharina-arrythmically.ngrok-free.dev']
 
 # Application definition
 
