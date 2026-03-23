@@ -11,6 +11,7 @@ class User(models.Model):
         (2, 'Windowed')
     ]
     resolution = models.IntegerField(choices=resolution_choices, default=1)
+    special_money = models.IntegerField(default=0)
 
     def __str__(self):
         return self.username
