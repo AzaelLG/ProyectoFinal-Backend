@@ -75,10 +75,13 @@ def favorite(request, character_id):
         return JsonResponse({'error': 'Método inválido'}, status=401)
 
     #Comprobación de datos
-    session_token = request.headers.get('session')
-    if not session_token:
-        return JsonResponse({'error': 'Session token no valido'}, status=400)
+    session_token = request.headers.get('Authorization')
+    character_id = request.headers.get('id')
 
+    if not session_token or not session_token.startswith('Bearer '):
+        return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
+
+    session_token = session_token.split(' ')[1]
     try:
         user = User.objects.get(session_token=session_token)
     except User.DoesNotExist:
@@ -133,10 +136,15 @@ def login(request):
 def get_characters(request):
     if request.method != 'GET':
         return JsonResponse({'error': 'Método invalido'}, status=401)
+
     #Validar datos
-    session_token = request.headers.get('session')
-    if not session_token:
-        return JsonResponse({'error': 'Session token no valido'}, status=400)
+    auth_header = request.headers.get('Authorization')
+
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
+
+
+    session_token = auth_header.split(' ')[1]
 
     try:
         user = User.objects.get(session_token=session_token)
@@ -145,8 +153,9 @@ def get_characters(request):
 
     personajes = Character.objects.all()
 
-    ids_comprados = list(UserCharacterSelected.objects.filter(user=user).values_list('character_id', flat=True))
+    inventario = UserCharacterSelected.objects.filter(user=user)
 
+    dict_comprados = {item.character_id: item.is_selected for item in inventario}
     #Listado personajes
     lista_respuestas = []
     for personaje in personajes:
@@ -161,10 +170,11 @@ def get_characters(request):
             'exp_multiplier': personaje.exp_multiplier,
             'base_movspeed': personaje.base_movspeed,
             'base_atckspeed': personaje.base_atckspeed,
-            'purchased': personaje.id in ids_comprados,
+            'purchased': personaje.id in dict_comprados,
+            'equiped':dict_comprados.get(personaje.id,False),
         })
 
-    return JsonResponse({'characters': lista_respuestas}, status=200)
+    return JsonResponse(lista_respuestas,safe = False, status=200)
 
 @csrf_exempt
 def comprar_personaje(request, character_id):
@@ -172,10 +182,13 @@ def comprar_personaje(request, character_id):
         return JsonResponse({'error': 'Method must be POST'}, status=405)
 
     #Validar datos
-    session_token = request.headers.get('session')
-    if not session_token:
+    session_token = request.headers.get('Authorization')
+    character_id = request.headers.get('id')
+
+    if not session_token or not session_token.startswith('Bearer '):
         return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
 
+    session_token = session_token.split(' ')[1]
     try:
         user = User.objects.get(session_token=session_token)
     except User.DoesNotExist:
@@ -279,11 +292,14 @@ def logout_user(request):
         return JsonResponse({'error': 'Método invalido'}, status=405)
 
    #Validar datos
-    session_token = request.headers.get('session')
+    auth_header = request.headers.get('Authorization')
 
-    if not session_token:
+    # 2. Si no existe o no empieza por "Bearer ", la rechazamos
+    if not auth_header or not auth_header.startswith('Bearer '):
         return JsonResponse({'error': 'Session token no proporcionado'}, status=401)
 
+    # 3. Extraemos el token (cortamos por el espacio y cogemos la segunda parte)
+    session_token = auth_header.split(' ')[1]
     try:
         user = User.objects.get(session_token=session_token)
     except User.DoesNotExist:
@@ -291,7 +307,38 @@ def logout_user(request):
 
 
     #Ponemos el token a None
-    user.session_token = None
+    user.session_token = ""
     user.save()
 
     return JsonResponse({'mensaje': 'Sesión cerrada correctamente'}, status=200)
+
+@csrf_exempt
+def validar_token(request):
+    if request.method == 'GET':
+        try:
+            # Buscamos la cabecera 'Authorization'
+            auth_header = request.headers.get('Authorization')
+
+            if not auth_header or not auth_header.startswith('Bearer '):
+                return JsonResponse({'valido': False, 'error': 'Token no proporcionado'}, status=400)
+
+            # Extraemos el token quitando la palabra "Bearer "
+            token_recibido = auth_header.split(' ')[1]
+
+            # Buscamos al usuario igual que antes
+            user = User.objects.filter(session_token=token_recibido).first()
+            favorito = UserCharacterSelected.objects.get(user=user, is_selected=True)
+
+            if user:
+                return JsonResponse({
+                    'username': user.username,
+                    'special_money': user.special_money,
+                    'volume': user.volume,
+                    'resolution': user.resolution,
+                    'is_selected': favorito.character.name
+                })
+            else:
+                return JsonResponse({'valido': False}, status=401)
+
+        except Exception as e:
+            return JsonResponse({'valido': False, 'error': str(e)}, status=500)

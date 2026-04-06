@@ -29,5 +29,6 @@ urlpatterns = [
     path('characters/', endpoints.get_characters),
     path('shop/<int:character_id>/buy/',endpoints.comprar_personaje),
     path('run/save/',endpoints.post_runs),
-    path('leaderboard/',endpoints.leaderboard)
+    path('leaderboard/',endpoints.leaderboard),
+    path('validar_token/',endpoints.validar_token),
 ]
