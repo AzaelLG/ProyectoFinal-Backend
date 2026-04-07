@@ -31,4 +31,5 @@ urlpatterns = [
     path('run/save/',endpoints.post_runs),
     path('leaderboard/',endpoints.leaderboard),
     path('validar_token/',endpoints.validar_token),
+    path('setting/',endpoints.post_settings)
 ]

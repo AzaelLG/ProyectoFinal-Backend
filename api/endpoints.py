@@ -316,16 +316,13 @@ def logout_user(request):
 def validar_token(request):
     if request.method == 'GET':
         try:
-            # Buscamos la cabecera 'Authorization'
             auth_header = request.headers.get('Authorization')
 
             if not auth_header or not auth_header.startswith('Bearer '):
                 return JsonResponse({'valido': False, 'error': 'Token no proporcionado'}, status=400)
 
-            # Extraemos el token quitando la palabra "Bearer "
             token_recibido = auth_header.split(' ')[1]
 
-            # Buscamos al usuario igual que antes
             user = User.objects.filter(session_token=token_recibido).first()
             favorito = UserCharacterSelected.objects.get(user=user, is_selected=True)
 
@@ -342,3 +339,36 @@ def validar_token(request):
 
         except Exception as e:
             return JsonResponse({'valido': False, 'error': str(e)}, status=500)
+
+@csrf_exempt
+def post_settings(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo invalido'}, status=401)
+    try:
+        auth_header = request.headers.get('Authorization')
+
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'valido': False, 'error': 'Token no proporcionado'}, status=400)
+
+        token_recibido = auth_header.split(' ')[1]
+
+        user = User.objects.get(session_token=token_recibido)
+
+        datos = json.loads(request.body)
+
+        if 'volume' in datos:
+            user.volume = int(datos.get('volume'))
+
+        if 'resolution' in datos:
+            user.resolution = int(datos.get('resolution'))
+
+        user.save()
+
+        return JsonResponse({'success': True, 'mensaje': 'Ajustes guardados correctamente'}, status=200)
+
+    except User.DoesNotExist:
+        return JsonResponse({'valido': False, 'error': 'Token no valido o expirado'}, status=401)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'El formato de los datos no es un JSON valido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
