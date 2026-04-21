@@ -372,3 +372,28 @@ def post_settings(request):
         return JsonResponse({'error': 'El formato de los datos no es un JSON valido'}, status=400)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def post_money(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Metodo invalido'}, status=401)
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({'valido': False, 'error': 'Token no proporcionado'}, status=400)
+        token_recibido = auth_header.split(' ')[1]
+
+        user = User.objects.get(session_token=token_recibido)
+        datos = json.loads(request.body)
+
+        if 'special_money' in datos:
+            user.special_money = int(datos.get('special_money'))
+
+        user.save()
+
+    except User.DoesNotExist:
+        return JsonResponse({'valido': False, 'error': 'Token no valido o expirado'}, status=401)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'El formato de los datos no es un JSON valido'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
