@@ -306,7 +306,7 @@ def logout_user(request):
 
 
     #Ponemos el token a None
-    user.session_token = ""
+    user.session_token = None
     user.save()
 
     return JsonResponse({'mensaje': 'Sesión cerrada correctamente'}, status=200)
