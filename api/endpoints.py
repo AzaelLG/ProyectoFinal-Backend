@@ -276,15 +276,14 @@ def post_runs(request):
         return JsonResponse({'error': 'El jugador no tiene un personaje equipado'}, status=400)
     new_run = Run.objects.create(
         user=user,
+        character = character_active,
         time = time,
         lvl_max = lvl_max,
-        special_money = special_money,
-        character = character_active,
     )
     if special_money > 0:
         user.special_money += special_money
         user.save()
-    return JsonResponse({'mensaje': 'Run guardada correctamente', 'run_id': new_run.id}, status=201)
+    return JsonResponse({'mensaje': 'Run guardada correctamente', 'run_id': new_run.id}, status=200)
 
 @csrf_exempt
 def logout_user(request):
